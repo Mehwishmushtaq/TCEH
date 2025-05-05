@@ -1,0 +1,41 @@
+name: Deploy React App to cPanel
+
+on:
+  push:
+    branches:
+      - main  # Change this if you use a different branch
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v3
+
+    - name: Set Up Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '18'  # Adjust to match your project
+
+    - name: Install Dependencies
+      run: npm install
+
+    - name: Build the Project
+      run: |
+        unset CI  # This prevents warnings from causing a build failure
+        npm install -g pm2
+        pm2 start npm --name "orgs3dviewer" -- start
+        npm run build
+
+    - name: Deploy via FTP (Force Replace All Files)
+      uses: SamKirkland/FTP-Deploy-Action@4.3.0
+      with:
+        server: ${{ secrets.FTP_SERVER }}
+        username: ${{ secrets.FTP_USERNAME }}
+        password: ${{ secrets.FTP_PASSWORD }}
+        local-dir: ./build/
+        server-dir: /public_html/orgs3dviewer/
+        dangerous-clean-slate: true
+        exclude: |
+          .htaccess
