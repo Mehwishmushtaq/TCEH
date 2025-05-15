@@ -420,7 +420,7 @@ const Map3DViewer = () => {
               name,
               mainZipFileName,
             )
-            // push a record for the “file library”
+            // push a record for the "file library"
             if (layers?.length) {
               newFileLayers.push({
                 fileName: name,
@@ -1001,7 +1001,7 @@ const Map3DViewer = () => {
           })
         } else {
           fileInfo.layers.forEach((layer) => {
-            // Create a THREE.Group to hold this layer’s objects
+            // Create a THREE.Group to hold this layer's objects
             const layerGroup = new THREE.Group()
             layerGroup.name = layer.layerName || "Unnamed Layer"
 
@@ -1021,7 +1021,7 @@ const Map3DViewer = () => {
             // Store a reference so you can toggle it later
             layer._group = layerGroup
 
-            // Make sure the group’s initial visibility matches layer.enableValue
+            // Make sure the group's initial visibility matches layer.enableValue
             layerGroup.visible = layer.enableValue
           })
         }
@@ -1057,7 +1057,7 @@ const Map3DViewer = () => {
     // controls.minAzimuthAngle = -Infinity;
     // controls.maxAzimuthAngle = Infinity;
     // // Allow flipping the model upside down by relaxing vertical limits:
-    // controls.minPolarAngle = -Math.PI; // or 0 if you prefer not to go below the “floor”
+    // controls.minPolarAngle = -Math.PI; // or 0 if you prefer not to go below the "floor"
     // controls.maxPolarAngle = Math.PI; // default is Math.PI, but you can go to Infinity
     controls.update()
     controlRef.current = controls
@@ -2158,19 +2158,77 @@ const Map3DViewer = () => {
   }
 
   // Add function to calculate volume between surfaces
-  const calculateVolume = (surface1, surface2, polygon = null) => {
-    // This is a simplified implementation - in a real scenario, you would:
-    // 1. Clip both surfaces to the polygon if provided
-    // 2. Create a grid of sample points
-    // 3. Calculate height differences at each point
-    // 4. Multiply by the area to get volume
-
-    // For demonstration purposes, return sample values
-    return {
-      cut: 750,
-      fill: 500,
-      excess: 250,
+  const calculateVolume = (surfaceId, secondSurfaceId, polygon = null, reportMode = "stockpile") => {
+    // 1. Find the selected surface
+    const selectedSurface = surfaceLibrary.find(s => s.id === surfaceId);
+    if (!selectedSurface || !polygon || polygon.length < 3) {
+      return null;
     }
+
+    // 2. Generate base/top surface from polygon points
+    // For demonstration, we'll create a flat surface at the min (base) or max (top) elevation of the polygon
+    const elevations = polygon.map(pt => pt.z);
+    const minElevation = Math.min(...elevations);
+    const maxElevation = Math.max(...elevations);
+
+    let generatedSurfaceElevation;
+    if (reportMode === "stockpile") {
+      generatedSurfaceElevation = minElevation; // base surface
+    } else {
+      generatedSurfaceElevation = maxElevation; // top surface
+    }
+
+    // 3. Calculate area of the polygon (using Shoelace formula)
+    function polygonArea(points) {
+      let area = 0;
+      for (let i = 0; i < points.length; i++) {
+        const j = (i + 1) % points.length;
+        area += points[i].x * points[j].y;
+        area -= points[j].x * points[i].y;
+      }
+      return Math.abs(area / 2);
+    }
+    const area = polygonArea(polygon);
+
+    // 4. Calculate average height difference between selected surface and generated surface within polygon
+    // For demonstration, use the average difference between selected surface elevations and generated surface elevation
+    // In a real scenario, you would sample the selected surface mesh within the polygon area
+    let avgSurfaceElevation = 0;
+    if (selectedSurface.vertices && selectedSurface.vertices.length > 0) {
+      // Filter vertices inside polygon (simple bounding box for demo)
+      const xs = polygon.map(p => p.x);
+      const ys = polygon.map(p => p.y);
+      const minX = Math.min(...xs), maxX = Math.max(...xs);
+      const minY = Math.min(...ys), maxY = Math.max(...ys);
+      const insideVerts = selectedSurface.vertices.filter(
+        v => v.x >= minX && v.x <= maxX && v.y >= minY && v.y <= maxY
+      );
+      if (insideVerts.length > 0) {
+        avgSurfaceElevation = insideVerts.reduce((sum, v) => sum + v.z, 0) / insideVerts.length;
+      } else {
+        avgSurfaceElevation = (minElevation + maxElevation) / 2;
+      }
+    } else {
+      avgSurfaceElevation = (minElevation + maxElevation) / 2;
+    }
+
+    // 5. Volume = area * height difference
+    const heightDiff = Math.abs(avgSurfaceElevation - generatedSurfaceElevation);
+    const volume = area * heightDiff;
+
+    // 6. Return results
+    return {
+      cut: reportMode === "stockpile" ? volume : 0,
+      fill: reportMode === "depression" ? volume : 0,
+      excess: reportMode === "stockpile" ? volume : -volume,
+      area,
+      heightDiff,
+      minElevation,
+      maxElevation,
+      polygonPoints: polygon,
+      generatedSurfaceElevation,
+      avgSurfaceElevation,
+    };
   }
 
   // Add function to handle the Surface Report Modal
@@ -2379,6 +2437,8 @@ const Map3DViewer = () => {
           selectedElevation={selectedElevation}
           setSelectedElevation={setSelectedElevation}
           calculateVolume={calculateVolume}
+          toggleMultiPointMode={toggleMultiPointMode}
+          isMultiPointMode={isMultiPointMode}
         />
       )}
     </>
