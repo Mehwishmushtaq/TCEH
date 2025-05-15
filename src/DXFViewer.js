@@ -2178,6 +2178,181 @@ const Map3DViewer = () => {
     setShowSurfaceReportModal(false)
   }
 
+  // Add these functions to handle the Plane Features and Top-Down View functionality
+
+  // Modify the togglePlaneFeatures function to properly constrain all elements to a flat plane
+  const togglePlaneFeaturesFunc = () => {
+    setPlaneFeatures(!planeFeatures)
+
+    if (!planeFeatures) {
+      // When enabling plane features, apply constraints to all elements
+
+      // 1. Constrain surfaces
+      surfaceLibrary.forEach((surf) => {
+        const mesh = surf._object
+        if (mesh) {
+          // Store original position for later restoration
+          if (!mesh._originalPosition) {
+            mesh._originalPosition = mesh.position.clone()
+          }
+          // Constrain to flat plane
+          mesh.scale.set(1, 1, 0.001)
+        }
+      })
+
+      // 2. Constrain lines, polygons, and points in fileLayers
+      fileLayers.forEach((fileInfo) => {
+        fileInfo.layers.forEach((layer) => {
+          if (layer._group) {
+            layer._group.traverse((object) => {
+              if (object.isLine || object.isPoints || object.isMesh) {
+                // Store original position/scale
+                if (!object._originalScale) {
+                  object._originalScale = object.scale.clone()
+                  object._originalPosition = object.position.clone()
+                }
+                // Flatten Z dimension
+                object.scale.z = 0.001
+              }
+            })
+          }
+        })
+      })
+
+      // 3. Constrain any measurement lines or markers
+      if (sceneRef.current) {
+        sceneRef.current.traverse((object) => {
+          if (
+            object.name &&
+            (object.name.includes("measureLine") ||
+              object.name.includes("marker") ||
+              object.name.includes("polyline") ||
+              object.name.includes("point"))
+          ) {
+            if (!object._originalScale) {
+              object._originalScale = object.scale.clone()
+              object._originalPosition = object.position.clone()
+            }
+            object.scale.z = 0.001
+          }
+        })
+      }
+
+      // If top-down view is also enabled, ensure it's applied
+      if (topDownView) {
+        applyTopDownView()
+      }
+    } else {
+      // When disabling, restore original state
+
+      // 1. Restore surfaces
+      surfaceLibrary.forEach((surf) => {
+        const mesh = surf._object
+        if (mesh) {
+          mesh.scale.set(1, 1, 1)
+          if (mesh._originalPosition) {
+            mesh.position.copy(mesh._originalPosition)
+          }
+        }
+      })
+
+      // 2. Restore lines, polygons, and points
+      fileLayers.forEach((fileInfo) => {
+        fileInfo.layers.forEach((layer) => {
+          if (layer._group) {
+            layer._group.traverse((object) => {
+              if (object._originalScale) {
+                object.scale.copy(object._originalScale)
+              }
+              if (object._originalPosition) {
+                object.position.copy(object._originalPosition)
+              }
+            })
+          }
+        })
+      })
+
+      // 3. Restore measurement elements
+      if (sceneRef.current) {
+        sceneRef.current.traverse((object) => {
+          if (object._originalScale) {
+            object.scale.copy(object._originalScale)
+          }
+          if (object._originalPosition) {
+            object.position.copy(object._originalPosition)
+          }
+        })
+      }
+    }
+
+    // Re-render the scene
+    if (rendererRef.current && sceneRef.current && cameraRef.current) {
+      rendererRef.current.render(sceneRef.current, cameraRef.current)
+    }
+  }
+
+  // Helper function to apply top-down view constraints
+  const applyTopDownView = () => {
+    if (!cameraRef.current || !sceneRef.current || !controlRef.current) return
+
+    // Store original camera position for restoration
+    if (!initialCamPoseRef.current._topDownBackup) {
+      initialCamPoseRef.current._topDownBackup = {
+        pos: cameraRef.current.position.clone(),
+        up: cameraRef.current.up.clone(),
+        target: controlRef.current.target.clone(),
+      }
+    }
+
+    // Calculate scene bounds
+    const box = new THREE.Box3().setFromObject(sceneRef.current)
+    const center = box.getCenter(new THREE.Vector3())
+    const size = box.getSize(new THREE.Vector3())
+
+    // Position camera directly above the center at an appropriate height
+    const height = Math.max(size.x, size.y) * 1.5
+    cameraRef.current.position.set(center.x, center.y, center.z + height)
+    cameraRef.current.up.set(0, 1, 0)
+    cameraRef.current.lookAt(center)
+
+    // Update controls target
+    controlRef.current.target.copy(center)
+
+    // Disable rotation in TrackballControls
+    controlRef.current.noRotate = true
+
+    // Update controls
+    controlRef.current.update()
+  }
+
+  // Modify the toggleTopDownView function to properly implement top-down viewing with no tilt
+  const toggleTopDownViewFunc = () => {
+    setTopDownView(!topDownView)
+
+    if (!topDownView) {
+      // Enable top-down view
+      applyTopDownView()
+    } else {
+      // Restore original camera settings
+      if (initialCamPoseRef.current._topDownBackup) {
+        cameraRef.current.position.copy(initialCamPoseRef.current._topDownBackup.pos)
+        cameraRef.current.up.copy(initialCamPoseRef.current._topDownBackup.up)
+        controlRef.current.target.copy(initialCamPoseRef.current._topDownBackup.target)
+
+        // Re-enable rotation
+        controlRef.current.noRotate = false
+      }
+    }
+
+    // Update controls and render
+    if (controlRef.current) {
+      controlRef.current.update()
+    }
+    if (rendererRef.current && sceneRef.current && cameraRef.current) {
+      rendererRef.current.render(sceneRef.current, cameraRef.current)
+    }
+  }
+
   // console.log('progressStates', progressStates);
   return (
     <>
@@ -2317,9 +2492,9 @@ const Map3DViewer = () => {
                     bvhCalculationLoading={bvhCalculationLoading}
                     genericProgressBar={genericProgressBar}
                     planeFeatures={planeFeatures}
-                    togglePlaneFeatures={togglePlaneFeatures}
+                    togglePlaneFeatures={togglePlaneFeaturesFunc}
                     topDownView={topDownView}
-                    toggleTopDownView={toggleTopDownView}
+                    toggleTopDownView={toggleTopDownViewFunc}
                     handleSurfaceReportType={handleSurfaceReportType}
                   />
                   {/* The Graph Modal */}

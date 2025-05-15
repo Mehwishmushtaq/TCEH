@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { toggleResetControls, zoomExtents } from "../utils/controlsUtils"
-import { Button, Flex, Tabs, Spin } from "antd"
+import { Button, Flex, Tabs, Spin, Switch, notification } from "antd"
 
 // Update the component props to include the new props
 export const ModeButtons = ({
@@ -31,7 +31,42 @@ export const ModeButtons = ({
   handleSurfaceReportType,
 }) => {
   const [tabKeys, setTabKeys] = useState()
-  // Update the geometryControls function to include the new Plane Features and Top-Down View buttons
+
+  // Add this function to check if any surfaces are enabled
+  const checkSurfacesEnabled = () => {
+    if (!surfaceLibrary || surfaceLibrary.length === 0) return false
+    return surfaceLibrary.some((surface) => surface.enableValue === true)
+  }
+
+  // Create wrapper functions for the toggle functions
+  const handleToggleSinglePointMode = () => {
+    if (!checkSurfacesEnabled()) {
+      // Show notification if no surfaces are enabled
+      notification.warning({
+        message: "Surface Required",
+        description: "Please enable at least one surface in the Surface Library to use Section by Line.",
+        placement: "top",
+        duration: 3,
+      })
+      return
+    }
+    toggleSinglePointMode()
+  }
+
+  const handleTogglePolylineMode = () => {
+    if (!checkSurfacesEnabled()) {
+      // Show notification if no surfaces are enabled
+      notification.warning({
+        message: "Surface Required",
+        description: "Please enable at least one surface in the Surface Library to use Section by Polyline.",
+        placement: "top",
+        duration: 3,
+      })
+      return
+    }
+    togglePolylineMode()
+  }
+  // Update the geometryControls function to include the Plane Features and Top-Down View buttons
   const geometryControls = () => {
     return (
       <Flex justify="start" gap={10} align="center" className="p-1">
@@ -44,12 +79,14 @@ export const ModeButtons = ({
             <Button type={flattenToPlane ? "primary" : "default"} onClick={() => setFlattenToPlane(!flattenToPlane)}>
               Plane Surface
             </Button>
-            <Button type={planeFeatures ? "primary" : "default"} onClick={togglePlaneFeatures}>
-              Plane Features
-            </Button>
-            <Button type={topDownView ? "primary" : "default"} onClick={toggleTopDownView}>
-              Top-Down View
-            </Button>
+            <Flex align="center" gap={2}>
+              <span>Plane Features</span>
+              <Switch checked={planeFeatures} onChange={togglePlaneFeatures} />
+            </Flex>
+            <Flex align="center" gap={2}>
+              <span>Top-Down View</span>
+              <Switch checked={topDownView} onChange={toggleTopDownView} />
+            </Flex>
           </>
         ) : null}
       </Flex>
@@ -88,14 +125,14 @@ export const ModeButtons = ({
           <Flex justify="start" gap={10} className="p-1">
             <Button
               disabled={bvhCalculationLoading}
-              onClick={toggleSinglePointMode}
+              onClick={handleToggleSinglePointMode}
               type={isSinglePointMode ? "primary" : "default"}
             >
               Section by Line
             </Button>
             <Button
               disabled={bvhCalculationLoading}
-              onClick={togglePolylineMode}
+              onClick={handleTogglePolylineMode}
               type={isPolylineMode ? "primary" : "default"}
             >
               Section by Polyline
