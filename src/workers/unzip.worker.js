@@ -97,7 +97,7 @@ async function parseLandXMLwithSax(data) {
           // '@_elevMin': node.attributes.elevMin || '',
           Property: {},
         }
-        // If we’re inside <Project>, add it there
+        // If we're inside <Project>, add it there
         if (tagStack.includes("Project")) {
           currentProject.Feature = currentFeature
         } else if (tagStack.includes("SourceData")) {
@@ -397,37 +397,31 @@ self.onmessage = async (event) => {
 
     // We'll process all files at once (no partial chunking here)
 
-    // Add special handling for .psli files
+    // PHASE 2.02a: Special handling for .psli files
     if (isPsli) {
       // Look for .jpg, .jgw, and .txt files
       let jpgFile = null
       let jgwFile = null
       let txtFile = null
 
-      const files = []
       for (const fileName of fileNames) {
-        files.push({ name: fileName, async: async () => unzipped[fileName] })
-      }
-
-      for (const file of files) {
-        const fileName = file.name.toLowerCase()
-        if (fileName.endsWith(".jpg") || fileName.endsWith(".jpeg")) {
-          jpgFile = file
-        } else if (fileName.endsWith(".jgw")) {
-          jgwFile = file
-        } else if (fileName.endsWith(".txt")) {
-          txtFile = file
+        const lowerName = fileName.toLowerCase()
+        if (lowerName.endsWith(".jpg") || lowerName.endsWith(".jpeg")) {
+          jpgFile = fileName
+        } else if (lowerName.endsWith(".jgw")) {
+          jgwFile = fileName
+        } else if (lowerName.endsWith(".txt")) {
+          txtFile = fileName
         }
       }
 
       // Process the files
       if (jpgFile && jgwFile) {
         let elevation = 0
-        let rawFile = null
 
-        // If txt file exists, extract elevation
+        // PHASE 2.02b: If txt file exists, extract elevation
         if (txtFile && unzipContent) {
-          const txtContent = new TextDecoder().decode(unzipped[txtFile.name])
+          const txtContent = new TextDecoder().decode(unzipped[txtFile])
           // Try to parse the last line as elevation
           const lines = txtContent.trim().split("\n")
           const lastLine = lines[lines.length - 1]
@@ -436,15 +430,15 @@ self.onmessage = async (event) => {
           }
         }
 
-        // Process JGW file
-        const jgwContent = new TextDecoder().decode(unzipped[jgwFile.name])
+        // PHASE 2.02b, 2.02c: Process JGW file for georeferencing
+        const jgwContent = new TextDecoder().decode(unzipped[jgwFile])
         const jgwValues = {
           data: jgwContent,
           parsed: parseJgwFile(jgwContent),
         }
 
         // Process JPG file
-        rawFile = unzipped[jpgFile.name]
+        const rawFile = unzipped[jpgFile]
         const jpgData = arrayBufferToBase64(rawFile)
 
         self.postMessage({
@@ -454,7 +448,7 @@ self.onmessage = async (event) => {
               fileName: zipfileName,
               jpgFile: {
                 data: `data:image/jpeg;base64,${jpgData}`,
-                fileName: jpgFile.name,
+                fileName: jpgFile,
               },
               jgwValues: {
                 data: jgwContent,
@@ -539,7 +533,7 @@ self.onmessage = async (event) => {
   }
 }
 
-// Helper function to parse JGW file
+// PHASE 2.02b, 2.02c: Function to parse JGW (World) file
 function parseJgwFile(jgwContent) {
   const lines = jgwContent.trim().split("\n")
   if (lines.length >= 6) {

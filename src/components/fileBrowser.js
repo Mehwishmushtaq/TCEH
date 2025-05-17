@@ -1,42 +1,29 @@
-import React, { useEffect, useState, useRef } from 'react';
-import {
-  Button,
-  Divider,
-  Flex,
-  Modal,
-  Spin,
-  List,
-  Card,
-  Checkbox,
-  Breadcrumb,
-  Select,
-} from 'antd';
-import axios from 'axios';
-import { parseLargeFileInWorker } from '../utils/workerParseHelper';
-import { primaryColor } from '../constants/theme';
-import { unzipLargeFileInWorker } from '../utils/unzipWorkerHelper';
+"use client"
 
-async function fetchWithProgress(url, type = '', onProgress) {
+import { useEffect, useState, useRef } from "react"
+import { Button, Divider, Flex, Modal, Spin, List, Card, Checkbox, Breadcrumb } from "antd"
+import axios from "axios"
+import { parseLargeFileInWorker } from "../utils/workerParseHelper"
+import { primaryColor } from "../constants/theme"
+import { unzipLargeFileInWorker } from "../utils/unzipWorkerHelper"
+
+async function fetchWithProgress(url, type = "", onProgress) {
   const response = await axios.get(url, {
-    responseType: type === 'pslz' ? 'arraybuffer' : 'blob',
+    responseType: type === "pslz" ? "arraybuffer" : "blob",
     onDownloadProgress: (progressEvent) => {
       if (progressEvent.total) {
-        const percentCompleted = Math.round(
-          (progressEvent.loaded * 100) / progressEvent.total
-        );
-        onProgress(percentCompleted);
+        const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total)
+        onProgress(percentCompleted)
       }
     },
     onUploadProgress: (progressEvent) => {
       if (progressEvent.total) {
-        const percentCompleted = Math.round(
-          (progressEvent.loaded * 100) / progressEvent.total
-        );
-        onProgress(percentCompleted);
+        const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total)
+        onProgress(percentCompleted)
       }
     },
-  });
-  return response;
+  })
+  return response
 }
 
 const FileBrowser = ({
@@ -54,99 +41,98 @@ const FileBrowser = ({
   setFilesDataSaved,
   filesDataSaved,
 }) => {
-  const org_id = authState?.user?.id;
-  const referrerDomain = document.referrer
-    ? new URL(document.referrer).origin
-    : `https://tvspt.com`;
-  const baseUrl = ({ prefix = '', selectedSiteId = '' }) => {
-    return `${referrerDomain}/api/v1/mvporgsprojects/show?id=${selectedSiteId.id}&type=1&prefix=${prefix}&role=${authState.user.role}&isAdminLoggedIn=${authState.isAdminLoggedIn}&token=${token}`;
-  };
-  const allowTypes = ['xml', 'dxf', 'pslz'];
-  const [progress, setProgress] = useState(0);
+  const org_id = authState?.user?.id
+  const referrerDomain = document.referrer ? new URL(document.referrer).origin : `https://tvspt.com`
+  const baseUrl = ({ prefix = "", selectedSiteId = "" }) => {
+    return `${referrerDomain}/api/v1/mvporgsprojects/show?id=${selectedSiteId.id}&type=1&prefix=${prefix}&role=${authState.user.role}&isAdminLoggedIn=${authState.isAdminLoggedIn}&token=${token}`
+  }
+  // PHASE 2.02a: Add 'psli' to allowed file types
+  const allowTypes = ["xml", "dxf", "pslz", "psli"]
+  const [progress, setProgress] = useState(0)
 
-  const [currentAWSData, setCurrentAWSData] = useState([]);
-  const [itemsData, setItemsData] = useState([]);
-  const [previousFolder, setPreviousFolder] = useState(['Sites']);
-  const [breadcrumbItems, setBreadcrumbItems] = useState([]);
-  const [isLoading, setIsLoading] = useState([]);
-  const [awsSignedUrls, setAwsSignedUrls] = useState([]);
-  const [allFilesData, setAllFilesData] = useState([]);
-  const [apiProgress, setApiProgress] = useState(0);
-  const [zipProgress, setZipProgress] = useState(0);
-  const [sitesList, setSitesList] = useState([]);
-  const [selectedSiteId, setSelectedSiteId] = useState(null);
-  const [selectedPrefix, setSelectedPrefix] = useState(null);
-  const fetchedUrls = useRef(new Set());
+  const [currentAWSData, setCurrentAWSData] = useState([])
+  const [itemsData, setItemsData] = useState([])
+  const [previousFolder, setPreviousFolder] = useState(["Sites"])
+  const [breadcrumbItems, setBreadcrumbItems] = useState([])
+  const [isLoading, setIsLoading] = useState([])
+  const [awsSignedUrls, setAwsSignedUrls] = useState([])
+  const [allFilesData, setAllFilesData] = useState([])
+  const [apiProgress, setApiProgress] = useState(0)
+  const [zipProgress, setZipProgress] = useState(0)
+  const [sitesList, setSitesList] = useState([])
+  const [selectedSiteId, setSelectedSiteId] = useState(null)
+  const [selectedPrefix, setSelectedPrefix] = useState(null)
+  const fetchedUrls = useRef(new Set())
 
-  const queryParameters = new URLSearchParams(window.location.search);
-  const token = queryParameters.get('token');
+  const queryParameters = new URLSearchParams(window.location.search)
+  const token = queryParameters.get("token")
   const closeBrowserFileModal = (e) => {
-    e.stopPropagation();
-    setShowBrowserFiles(!showBrowserFiles);
-  };
+    e.stopPropagation()
+    setShowBrowserFiles(!showBrowserFiles)
+  }
 
   const fetchAwsFileStructure = async () => {
     try {
-      setIsLoading(true);
-      const response = await axios.get(baseUrl({ selectedSiteId }));
-      const filesData = response.data.data.files;
+      setIsLoading(true)
+      const response = await axios.get(baseUrl({ selectedSiteId }))
+      const filesData = response.data.data.files
       const filterFiles = filesData.filter((fil) => {
-        const type = fil.relative_path.split('.').pop().toLowerCase();
+        const type = fil.relative_path.split(".").pop().toLowerCase()
         if (allowTypes.includes(type) || fil.fileFolder.isFolder) {
-          return fil;
+          return fil
         }
-      });
+      })
       if (filterFiles.length) {
-        setCurrentAWSData(filterFiles);
+        setCurrentAWSData(filterFiles)
       } else {
-        setCurrentAWSData([]);
+        setCurrentAWSData([])
       }
-      setIsLoading(false);
+      setIsLoading(false)
     } catch (error) {
-      setIsLoading(false);
+      setIsLoading(false)
 
-      console.error('Error fetching AWS file structure:', error);
+      console.error("Error fetching AWS file structure:", error)
     }
-  };
+  }
   const modalStyles = {
-    top: '25px',
+    top: "25px",
     body: {
-      height: '540px',
-      overflowY: 'scroll',
+      height: "540px",
+      overflowY: "scroll",
     },
     content: {
-      height: 'calc(100vh - 40px)',
-      maxHeight: 'calc(100vh - 40px)',
-      overflowY: 'auto',
+      height: "calc(100vh - 40px)",
+      maxHeight: "calc(100vh - 40px)",
+      overflowY: "auto",
       zIndex: 99999,
     },
     mask: { zIndex: 100 },
-  };
+  }
   const fetchSites = async () => {
     try {
-      setIsLoading(true);
+      setIsLoading(true)
 
       const response = await axios.get(
-        `${referrerDomain}/api/v1/mvporgsprojects/list?showInactive=0&org_id=${org_id}&token=${token}`
+        `${referrerDomain}/api/v1/mvporgsprojects/list?showInactive=0&org_id=${org_id}&token=${token}`,
         // { headers: headers }
-      );
+      )
       if (response.data.success) {
-        setSitesList(response.data.data || []);
-        setIsLoading(false);
+        setSitesList(response.data.data || [])
+        setIsLoading(false)
       }
     } catch (err) {
-      setIsLoading(false);
-      console.error('Failed to fetch sites:', err);
+      setIsLoading(false)
+      console.error("Failed to fetch sites:", err)
     }
-  };
+  }
   useEffect(() => {
-    fetchSites();
-  }, []);
+    fetchSites()
+  }, [])
   useEffect(() => {
     if (currentAWSData.length) {
       const itemsData = currentAWSData.map((item, i) => {
-        const isFolder = item.fileFolder.isFolder;
-        const fileType = item.relative_path.split('.').pop().toLowerCase();
+        const isFolder = item.fileFolder.isFolder
+        const fileType = item.relative_path.split(".").pop().toLowerCase()
         return {
           id: item.id,
           aws_path: item.aws_path,
@@ -155,134 +141,124 @@ const FileBrowser = ({
           relative_path: item.relative_path,
           size: item.size,
           isFolder,
-          fileType: !isFolder ? fileType : 'Folder',
-        };
-      });
-      setItemsData(itemsData);
+          fileType: !isFolder ? fileType : "Folder",
+        }
+      })
+      setItemsData(itemsData)
     } else {
-      setItemsData([]);
+      setItemsData([])
     }
-  }, [currentAWSData]);
+  }, [currentAWSData])
 
   useEffect(() => {
     if (showBrowserFiles && selectedSiteId) {
-      setSelectedFiles([]);
-      fetchAwsFileStructure();
+      setSelectedFiles([])
+      fetchAwsFileStructure()
     }
-  }, [showBrowserFiles, selectedSiteId]);
+  }, [showBrowserFiles, selectedSiteId])
 
   const onSelectFile = (item) => {
-    const findItem = selectedFiles?.find((ite) => ite.id == item.id);
+    const findItem = selectedFiles?.find((ite) => ite.id == item.id)
     if (!findItem) {
-      setSelectedFiles([...selectedFiles, item]);
+      setSelectedFiles([...selectedFiles, item])
     } else {
-      const filterItems = selectedFiles.filter((ite) => ite.id != item.id);
-      setSelectedFiles(filterItems);
+      const filterItems = selectedFiles.filter((ite) => ite.id != item.id)
+      setSelectedFiles(filterItems)
     }
-  };
+  }
   const handleSelectFolder = async (item) => {
-    const folderName = item.fileFolder.name;
-    const folderArr = previousFolder;
-    const prefix = folderArr.slice(2);
-    let joinPrefix = '';
+    const folderName = item.fileFolder.name
+    const folderArr = previousFolder
+    const prefix = folderArr.slice(2)
+    let joinPrefix = ""
     if (prefix.includes(folderName)) {
-      joinPrefix = prefix.slice(0, -1).join('');
+      joinPrefix = prefix.slice(0, -1).join("")
     } else {
-      joinPrefix = prefix.join('') + folderName;
+      joinPrefix = prefix.join("") + folderName
     }
-    const lastFolder = previousFolder[previousFolder.length - 1];
+    const lastFolder = previousFolder[previousFolder.length - 1]
     if (lastFolder !== folderName) {
-      setIsLoading(true);
+      setIsLoading(true)
       try {
         //   setSelectedFolder(folderId);
-        const response = await axios.get(
-          baseUrl({ prefix: joinPrefix, selectedSiteId })
-        );
-        const filesData = response.data.data.files;
+        const response = await axios.get(baseUrl({ prefix: joinPrefix, selectedSiteId }))
+        const filesData = response.data.data.files
         const filterFiles = filesData.filter((fil) => {
-          const type = fil.relative_path.split('.').pop().toLowerCase();
+          const type = fil.relative_path.split(".").pop().toLowerCase()
           if (allowTypes.includes(type) || fil.fileFolder.isFolder) {
-            return fil;
+            return fil
           }
-        });
+        })
         if (filterFiles.length) {
-          setCurrentAWSData(filterFiles);
+          setCurrentAWSData(filterFiles)
         } else {
-          setCurrentAWSData([]);
+          setCurrentAWSData([])
         }
-        const folderExist = previousFolder.includes(folderName);
+        const folderExist = previousFolder.includes(folderName)
         if (folderName && !folderExist) {
-          setPreviousFolder([...previousFolder, folderName]);
+          setPreviousFolder([...previousFolder, folderName])
         }
-        setIsLoading(false);
+        setIsLoading(false)
 
         //   setSelectedFiles(response.data);
       } catch (error) {
-        setIsLoading(false);
-        console.error('Error fetching folder files:', error);
+        setIsLoading(false)
+        console.error("Error fetching folder files:", error)
       }
     }
-  };
+  }
 
   const handleSelectBreadCrumbs = (item) => {
-    const index = previousFolder.findIndex((it) => it == item);
-    const sliced = previousFolder.slice(0, index + 1);
-    if (item == 'Sites') {
-      setSelectedSiteId(null);
-      setProjectId(null);
-      setCurrentAWSData([]);
-      fetchSites();
+    const index = previousFolder.findIndex((it) => it == item)
+    const sliced = previousFolder.slice(0, index + 1)
+    if (item == "Sites") {
+      setSelectedSiteId(null)
+      setProjectId(null)
+      setCurrentAWSData([])
+      fetchSites()
     } else if (item == selectedSiteId.name) {
-      fetchAwsFileStructure();
+      fetchAwsFileStructure()
     } else {
-      handleSelectFolder({ fileFolder: { name: item } });
+      handleSelectFolder({ fileFolder: { name: item } })
     }
-    setPreviousFolder(sliced);
-  };
+    setPreviousFolder(sliced)
+  }
   useEffect(() => {
     if (previousFolder.length) {
       // let crumbs = [...previousFolder]
       const bcitems = previousFolder.map((it) => {
         return {
           title: (
-            <span
-              className='text-primary cursor-pointer'
-              onClick={() => handleSelectBreadCrumbs(it)}
-            >
-              {it.replace(/\/$/, '')}{' '}
+            <span className="text-primary cursor-pointer" onClick={() => handleSelectBreadCrumbs(it)}>
+              {it.replace(/\/$/, "")}{" "}
             </span>
           ),
-        };
-      });
-      setBreadcrumbItems(bcitems);
+        }
+      })
+      setBreadcrumbItems(bcitems)
     }
-  }, [previousFolder]);
+  }, [previousFolder])
 
-  const fileTypesToLoad = [
-    'geometry_data.bin',
-    'bvh_data.bin',
-    'breakline_edges.bin',
-  ];
+  const fileTypesToLoad = ["geometry_data.bin", "bvh_data.bin", "breakline_edges.bin"]
 
   const handleSelectFinalFiles = async () => {
-    clearFull();
-    setIsLoading(true);
-    setPreviousFolder(['Sites']);
-    setSelectedFilesToUpload(selectedFiles);
-    setProjectId(selectedSiteId.id);
+    clearFull()
+    setIsLoading(true)
+    setPreviousFolder(["Sites"])
+    setSelectedFilesToUpload(selectedFiles)
+    setProjectId(selectedSiteId.id)
 
-    const filesDataSavedLocal = [];
-    const newAllFilesData = [];
-    const zipFilesData = [];
+    const filesDataSavedLocal = []
+    const newAllFilesData = []
+    const zipFilesData = []
 
     // 1) Attempt geometry preloading
     try {
       // For each file => call show_3d_files => if success, fetch geometry data
       for (const file of selectedFiles) {
-        const fileName = file.fileFolder.name;
-        const fileType = fileName.split('.').pop().toLowerCase();
-        const { geometryFetched, geometryBlob } =
-          await tryLoadPreCreatedGeometry(file);
+        const fileName = file.fileFolder.name
+        const fileType = fileName.split(".").pop().toLowerCase()
+        const { geometryFetched, geometryBlob } = await tryLoadPreCreatedGeometry(file)
 
         if (geometryFetched) {
           // If geometry data is found, store it
@@ -290,22 +266,22 @@ const FileBrowser = ({
             fileName,
             fileType,
             geometryFetched,
-          });
+          })
           newAllFilesData.push({
             geometrySavedData: true,
             file: geometryBlob,
-          });
+          })
         } else {
           // If not found => fallback to PSLZ or normal raw file approach
-          const fallbackResult = await fetchOrUnzipFile(file, zipFilesData);
+          const fallbackResult = await fetchOrUnzipFile(file, zipFilesData)
           filesDataSavedLocal.push({
             fileName,
             fileType,
             geometryFetched: false,
-          });
+          })
           // fallbackResult might push an item to newAllFilesData
           if (fallbackResult?.newAllFilesData) {
-            newAllFilesData.push(...fallbackResult.newAllFilesData);
+            newAllFilesData.push(...fallbackResult.newAllFilesData)
           }
         }
       }
@@ -314,14 +290,14 @@ const FileBrowser = ({
       for (const fileObj of newAllFilesData) {
         // PSLZ or geometry data or raw
         if (fileObj.geometrySavedData) {
-          // If it’s geometry .bin => store directly
+          // If it's geometry .bin => store directly
           setFilesData((prev) => [
             ...prev,
             {
               geometrySavedData: true,
               file: fileObj.file, // it's a Blob
             },
-          ]);
+          ])
         } else if (fileObj.parsedData) {
           // PSLZ unzipped data
           setFilesData((prev) => [
@@ -331,144 +307,143 @@ const FileBrowser = ({
               name: fileObj.name,
               mainZipFileName: fileObj.mainZipFileName,
             },
-          ]);
+          ])
         } else if (fileObj.file) {
           // e.g. a real Blob => parse in worker
-          const name = fileObj.name;
-          const fileType = fileObj.fileType;
+          const name = fileObj.name
+          const fileType = fileObj.fileType
           const parsed = await parseLargeFileInWorker({
             fileType,
             file: { name, file: fileObj.file },
             onProgress: (val) => setProgress(val),
-          });
-          setFilesData((prev) => [...prev, { content: parsed, name }]);
+          })
+          setFilesData((prev) => [...prev, { content: parsed, name }])
         }
       }
 
-      setTotalFilesLength(newAllFilesData.length);
-      setZipFilesData(zipFilesData);
-      setFilesDataSaved(filesDataSavedLocal);
+      setTotalFilesLength(newAllFilesData.length)
+      setZipFilesData(zipFilesData)
+      setFilesDataSaved(filesDataSavedLocal)
     } catch (err) {
-      console.error('Error in handleSelectFinalFiles pipeline:', err);
+      console.error("Error in handleSelectFinalFiles pipeline:", err)
     } finally {
-      setIsLoading(false);
-      setShowBrowserFiles(false);
+      setIsLoading(false)
+      setShowBrowserFiles(false)
     }
-  };
+  }
   async function tryLoadPreCreatedGeometry(file) {
-    let geometryFetched = false;
-    let geometryBlob = null;
+    let geometryFetched = false
+    let geometryBlob = null
 
     try {
       // 1) Construct the awsPathWithoutExt
       const awsPathWithoutExt = file.aws_path
-        .replace(/\.xml$/, '')
-        .replace(/\.dxf$/, '')
-        .replace(/\.pslz$/, '');
+        .replace(/\.xml$/, "")
+        .replace(/\.dxf$/, "")
+        .replace(/\.pslz$/, "")
       // e.g. we always pick [0]-th fileTypesToLoad => geometry_data.bin, or something
-      const urlFor3D = `${referrerDomain}/api/v1/mvporgsfiles/show_3d_files?aws_path=${awsPathWithoutExt}_geometry_data.bin&user_id=${authState.user.id}&is_download_call&token=${token}`;
+      const urlFor3D = `${referrerDomain}/api/v1/mvporgsfiles/show_3d_files?aws_path=${awsPathWithoutExt}_geometry_data.bin&user_id=${authState.user.id}&is_download_call&token=${token}`
 
       // 2) Attempt to fetch the 3D file's path
-      const res = await axios.get(urlFor3D);
-      const typeFileGet = res.data.data || {};
-      const directAwsPath = typeFileGet.aws_path;
+      const res = await axios.get(urlFor3D)
+      const typeFileGet = res.data.data || {}
+      const directAwsPath = typeFileGet.aws_path
       if (!directAwsPath) {
         // Means no geometry data found => skip
-        geometryFetched = false;
+        geometryFetched = false
       } else {
         // We do fetchWithProgress from that direct path
         const fetchResponse = await fetchWithProgress(
           directAwsPath,
-          '', // or 'bin'
-          (pct) => setApiProgress(pct)
-        );
-        geometryBlob = new Blob([fetchResponse.data]);
-        geometryFetched = true;
+          "", // or 'bin'
+          (pct) => setApiProgress(pct),
+        )
+        geometryBlob = new Blob([fetchResponse.data])
+        geometryFetched = true
       }
     } catch (error) {
-      geometryFetched = false; // fallback
+      geometryFetched = false // fallback
     }
 
-    return { geometryFetched, geometryBlob };
+    return { geometryFetched, geometryBlob }
   }
   async function fetchOrUnzipFile(file, zipFilesData) {
     // 1) first get presigned link
-    const url = `${referrerDomain}/api/v1/mvporgsfiles/show?id=${file.id}&user_id=${authState.user.id}&is_download_call&token=${token}`;
-    let result = { newAllFilesData: [] };
+    const url = `${referrerDomain}/api/v1/mvporgsfiles/show?id=${file.id}&user_id=${authState.user.id}&is_download_call&token=${token}`
+    const result = { newAllFilesData: [] }
     try {
-      const signResp = await axios.get(url);
-      const awsPath = signResp.data?.data?.aws_path;
-      if (!awsPath) return result; // skip
-      const fileName = file.fileFolder.name;
-      const fileType = fileName.split('.').pop().toLowerCase();
+      const signResp = await axios.get(url)
+      const awsPath = signResp.data?.data?.aws_path
+      if (!awsPath) return result // skip
+      const fileName = file.fileFolder.name
+      const fileType = fileName.split(".").pop().toLowerCase()
       // 2) fetch with progress
-      setApiProgress(0);
-      setZipProgress(0);
-      const fetchResponse = await fetchWithProgress(awsPath, fileType, (pct) =>
-        setApiProgress(pct)
-      );
+      setApiProgress(0)
+      setZipProgress(0)
+      const fetchResponse = await fetchWithProgress(awsPath, fileType, (pct) => setApiProgress(pct))
 
       // 3) PSLZ or normal
 
-      if (fileType === 'pslz') {
+      // PHASE 2.02a: Added support for .psli files
+      if (fileType === "pslz" || fileType === "psli") {
         // do unzip
         const unzipResult = await unzipLargeFileInWorker({
           fileData: fetchResponse.data,
           zipfileName: fileName,
           onProgress: (p) => setZipProgress(p),
           unzipContent: true,
-        });
+          isPsli: fileType === "psli", // PHASE 2.02a: Set isPsli flag for psli files
+        })
         if (unzipResult && unzipResult.length) {
           // store as needed, push to zipFilesData, etc.
           // For example, if you have main.xmlContent or main.dxfContent
           // push them into newAllFilesData
-          const main = unzipResult[0];
+          const main = unzipResult[0]
           let objectToSave = {
             fileName: main.fileName,
             jgwValues: main.jgwValues,
             jpgFile: main.jpgFile,
             mainZipFileName: main.fileName,
-          };
+            elevation: main.elevation, // PHASE 2.02b: Store elevation if available
+          }
           let alterFileObj = {
             ...file,
-          };
+          }
           if (main?.xmlContent) {
             objectToSave = {
               ...objectToSave,
               xmlFileName: main.xmlContent.fileName,
-            };
+            }
             alterFileObj = {
               ...alterFileObj,
               xmlFileName: main.xmlContent.fileName,
-            };
+            }
             result.newAllFilesData.push({
               name: main.xmlContent.fileName,
-              fileType: 'xml',
+              fileType: "xml",
               mainZipFileName: main.fileName,
               parsedData: main.xmlContent.data,
-            });
+            })
           }
           if (main?.dxfContent) {
             objectToSave = {
               ...objectToSave,
               dxfFileName: main.dxfContent.fileName,
-            };
+            }
             alterFileObj = {
               ...alterFileObj,
               dxfFileName: main.dxfContent.fileName,
-            };
+            }
             result.newAllFilesData.push({
               name: main.dxfContent.fileName,
-              fileType: 'dxf',
+              fileType: "dxf",
               mainZipFileName: main.fileName,
               parsedData: main.dxfContent.data,
-            });
+            })
           }
-          zipFilesData.push(objectToSave);
-          const findOriginalFileIndex = selectedFiles.findIndex(
-            (fil) => fil.id === file.id
-          );
-          selectedFiles.splice(findOriginalFileIndex, 1, alterFileObj);
+          zipFilesData.push(objectToSave)
+          const findOriginalFileIndex = selectedFiles.findIndex((fil) => fil.id === file.id)
+          selectedFiles.splice(findOriginalFileIndex, 1, alterFileObj)
         }
       } else {
         // normal file
@@ -476,57 +451,49 @@ const FileBrowser = ({
           name: fileName,
           fileType,
           file: new Blob([fetchResponse.data]),
-        });
+        })
       }
     } catch (error) {
-      console.error('Error in fetchOrUnzipFile fallback pipeline:', error);
+      console.error("Error in fetchOrUnzipFile fallback pipeline:", error)
     }
-    return result;
+    return result
   }
 
   const footerButtons = () => {
-    const btns = [];
+    const btns = []
     if (currentAWSData.length || selectedFiles.length) {
       btns.push(
-        <Button
-          disabled={isLoading}
-          key='close'
-          onClick={closeBrowserFileModal}
-        >
+        <Button disabled={isLoading} key="close" onClick={closeBrowserFileModal}>
           Close
-        </Button>
-      );
+        </Button>,
+      )
       if (selectedFiles.length) {
         btns.push(
-          <Button
-            disabled={isLoading}
-            onClick={handleSelectFinalFiles}
-            type='primary'
-          >
+          <Button disabled={isLoading} onClick={handleSelectFinalFiles} type="primary">
             Load Files
-          </Button>
-        );
+          </Button>,
+        )
       }
     } else {
       btns.push(
         <Button
           disabled={isLoading}
-          key='oK'
+          key="oK"
           onClick={() => {
             if (selectedSiteId) {
-              fetchAwsFileStructure();
+              fetchAwsFileStructure()
             } else {
-              fetchSites();
+              fetchSites()
             }
           }}
-          type='primary'
+          type="primary"
         >
           Reload
-        </Button>
-      );
+        </Button>,
+      )
     }
-    return btns;
-  };
+    return btns
+  }
 
   return (
     <>
@@ -534,7 +501,7 @@ const FileBrowser = ({
         <div>
           <p>Parsing File ... {progress}%</p>
           {/* Or a real progress bar */}
-          <progress value={progress} max='100'>
+          <progress value={progress} max="100">
             {progress}%
           </progress>
         </div>
@@ -545,7 +512,7 @@ const FileBrowser = ({
           open={showBrowserFiles}
           onCancel={!isLoading ? closeBrowserFileModal : () => {}}
           destroyOnClose={!isLoading}
-          width={'100%'}
+          width={"100%"}
           styles={modalStyles}
           footer={footerButtons()}
         >
@@ -553,12 +520,12 @@ const FileBrowser = ({
           <Divider />
 
           {isLoading ? (
-            <Flex justify='center' align='center' vertical>
+            <Flex justify="center" align="center" vertical>
               {apiProgress > 0 && apiProgress < 100 && (
                 <div>
                   <p>Fetching File Data... {apiProgress}%</p>
                   {/* Or a real progress bar */}
-                  <progress value={apiProgress} max='100'>
+                  <progress value={apiProgress} max="100">
                     {apiProgress}%
                   </progress>
                 </div>
@@ -567,7 +534,7 @@ const FileBrowser = ({
                 <div>
                   <p>Processing File... {zipProgress}%</p>
                   {/* Or a real progress bar */}
-                  <progress value={zipProgress} max='100'>
+                  <progress value={zipProgress} max="100">
                     {zipProgress}%
                   </progress>
                 </div>
@@ -577,17 +544,17 @@ const FileBrowser = ({
           ) : (
             <>
               {/* <Select
-                style={{ width: 200 }}
-                placeholder='Select site'
-                value={selectedSiteId}
-                onChange={(value) => setSelectedSiteId(value)}
-              >
-                {sitesList.map((site) => (
-                  <Select.Option key={site.id} value={site.id}>
-                    {site.name}
-                  </Select.Option>
-                ))}
-              </Select> */}
+               style={{ width: 200 }}
+               placeholder='Select site'
+               value={selectedSiteId}
+               onChange={(value) => setSelectedSiteId(value)}
+             >
+               {sitesList.map((site) => (
+                 <Select.Option key={site.id} value={site.id}>
+                   {site.name}
+                 </Select.Option>
+               ))}
+             </Select> */}
               {!selectedSiteId && (
                 <List
                   grid={{ gutter: 16, column: 1 }}
@@ -597,14 +564,14 @@ const FileBrowser = ({
                       <List.Item key={site.id}>
                         <Button
                           onClick={() => {
-                            setPreviousFolder(['Sites', site.name]);
-                            setSelectedSiteId(site);
+                            setPreviousFolder(["Sites", site.name])
+                            setSelectedSiteId(site)
                           }}
                         >
                           {site.name}
                         </Button>
                       </List.Item>
-                    );
+                    )
                   }}
                 />
               )}
@@ -613,9 +580,7 @@ const FileBrowser = ({
                   grid={{ gutter: 16, column: 1 }}
                   dataSource={itemsData}
                   renderItem={(item) => {
-                    const isItemSelected = selectedFiles.find(
-                      (i) => i.id == item.id
-                    );
+                    const isItemSelected = selectedFiles.find((i) => i.id == item.id)
                     return (
                       <List.Item>
                         {!item.isFolder ? (
@@ -623,28 +588,26 @@ const FileBrowser = ({
                             style={{
                               borderColor: primaryColor,
                             }}
-                            className='cursor-pointer'
+                            className="cursor-pointer"
                             styles={{
                               body: {
-                                padding: '12px',
+                                padding: "12px",
                                 color: primaryColor,
                               },
                             }}
                             onClick={() => onSelectFile(item)}
                           >
-                            <Flex justify='start' align='center'>
-                              <Checkbox checked={isItemSelected ? true : false}>
-                                {item.fileFolder.name}
-                              </Checkbox>
+                            <Flex justify="start" align="center">
+                              <Checkbox checked={isItemSelected ? true : false}>{item.fileFolder.name}</Checkbox>
                             </Flex>
                           </Card>
                         ) : (
                           <Button onClick={() => handleSelectFolder(item)}>
-                            {item.fileFolder.name.replace(/\/$/, '')}
+                            {item.fileFolder.name.replace(/\/$/, "")}
                           </Button>
                         )}
                       </List.Item>
-                    );
+                    )
                   }}
                 />
               )}
@@ -653,7 +616,7 @@ const FileBrowser = ({
         </Modal>
       )}
     </>
-  );
-};
+  )
+}
 
-export { FileBrowser };
+export { FileBrowser }
