@@ -1,48 +1,58 @@
-// computeUVsWorker.js
 /* eslint-disable no-restricted-globals */
 
-// computeUVsWorker.js
-// computeUVsWorker.js
-self.onmessage = function (e) {
-  const { positions, textureWidth, textureHeight, jgwValues } = e.data;
-  const { pixelWidth, pixelHeight, topLeftX, topLeftY } = jgwValues;
+// PHASE 2.02b, 2.02c: Worker for computing UVs for image overlay
+self.onmessage = (e) => {
+  const { positions, textureWidth, textureHeight, jgwValues } = e.data
 
-  const numVertices = positions.length / 3;
-  const uvArray = new Float32Array(numVertices * 2);
+  // Extract JGW values
+  const { pixelWidth, pixelHeight, topLeftX, topLeftY, rotationX, rotationY } = jgwValues
 
-  const CHUNK_SIZE = 10000; // e.g., process 50k vertices at a time
+  // Create UV array
+  const vertexCount = positions.length / 3
+  const uvArray = new Float32Array(vertexCount * 2)
 
-  let i = 0;
-  let k = 0;
+  // Report initial progress
+  self.postMessage({ type: "progress", percent: 0 })
 
-  function processChunk() {
-    const end = Math.min(i + CHUNK_SIZE, positions.length);
-    for (; i < end; i += 3) {
-      const x = positions[i];
-      const y = positions[i + 1];
+  // Process vertices in batches to report progress
+  const batchSize = 1000
+  const totalBatches = Math.ceil(vertexCount / batchSize)
 
-      let u = (x - topLeftX) / (textureWidth * pixelWidth);
-      let v = (topLeftY - y) / (textureHeight * Math.abs(pixelHeight));
-      v = 1 - v;
+  for (let batch = 0; batch < totalBatches; batch++) {
+    const start = batch * batchSize
+    const end = Math.min(start + batchSize, vertexCount)
 
-      uvArray[k++] = u;
-      uvArray[k++] = v;
+    for (let i = start; i < end; i++) {
+      const x = positions[i * 3]
+      const y = positions[i * 3 + 1]
+
+      // Convert world coordinates to pixel coordinates
+      let pixelX, pixelY
+
+      if (rotationX !== 0 || rotationY !== 0) {
+        // Handle rotation if present
+        const dx = x - topLeftX
+        const dy = y - topLeftY
+
+        // Apply inverse rotation and scaling
+        pixelX = (dx - (rotationY * dy) / pixelHeight) / (pixelWidth - (rotationX * rotationY) / pixelHeight)
+        pixelY = (dy - (rotationX * dx) / pixelWidth) / (pixelHeight - (rotationX * rotationY) / pixelWidth)
+      } else {
+        // Simple case without rotation
+        pixelX = (x - topLeftX) / pixelWidth
+        pixelY = (topLeftY - y) / Math.abs(pixelHeight)
+      }
+
+      // Convert to UV coordinates (0-1 range)
+      uvArray[i * 2] = pixelX / textureWidth
+      uvArray[i * 2 + 1] = pixelY / textureHeight
     }
 
-    // Send progress
-    const doneVertices = i / 3;
-    const percent = Math.round((doneVertices / numVertices) * 100);
-    self.postMessage({ type: 'progress', percent });
-
-    // If not done, queue the next chunk
-    if (i < positions.length) {
-      // Let the event loop breathe so the main thread can handle messages
-      setTimeout(processChunk, 0);
-    } else {
-      // Done
-      self.postMessage({ type: 'result', uvArray }, [uvArray.buffer]);
-    }
+    // Report progress
+    const progress = Math.round(((batch + 1) / totalBatches) * 100)
+    self.postMessage({ type: "progress", percent: progress })
   }
 
-  processChunk();
-};
+  // Return the computed UV array
+  self.postMessage({ type: "result", uvArray: uvArray })
+}
