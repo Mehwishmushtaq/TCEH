@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Modal, Button, Input, Select, Typography, Divider, Form, Radio, Card } from "antd"
+import { Modal, Button, Input, Select, Typography, Divider, Form, Radio, Card, message } from "antd"
 import { isMultiShapeCompleted, multiPointsRef } from "../constants/refStore"
 
 const { Title, Text } = Typography
@@ -21,6 +21,8 @@ export const SurfaceReportModal = ({
   selectedElevation,
   setSelectedElevation,
   calculateVolume,
+  toggleMultiPointMode,
+  isMultiPointMode,
 }) => {
   const [reportMode, setReportMode] = useState("stockpile") // stockpile or depression
   const [polygonDrawn, setPolygonDrawn] = useState(false)
@@ -28,6 +30,7 @@ export const SurfaceReportModal = ({
   const [volumeResults, setVolumeResults] = useState(null)
   const [polygonPoints, setPolygonPoints] = useState([])
   const [polygonElevationError, setPolygonElevationError] = useState(false)
+  const [drawingPolygon, setDrawingPolygon] = useState(false)
 
   useEffect(() => {
     // Reset state when modal opens
@@ -36,6 +39,7 @@ export const SurfaceReportModal = ({
     setVolumeResults(null)
     setPolygonPoints([])
     setPolygonElevationError(false)
+    setDrawingPolygon(false)
 
     // Set default report mode based on report type
     if (reportType === "stockpile") {
@@ -65,7 +69,12 @@ export const SurfaceReportModal = ({
 
     if (reportType === "stockpile") {
       // Calculate stockpile/depression volume
-      results = calculateVolume(selectedSurface, null, polygonPoints)
+      results = calculateVolume(
+        selectedSurface,
+        null,
+        polygonPoints,
+        reportMode // Pass stockpile or depression
+      )
     } else if (reportType === "elevation") {
       // Calculate surface to elevation volume
       results = calculateVolume(selectedSurface, { elevation: selectedElevation }, polygonPoints)
@@ -82,6 +91,14 @@ export const SurfaceReportModal = ({
     // In a real implementation, this would save the report to a file
     // For now, just close the modal
     onClose()
+  }
+
+  const handleCreatePolygon = () => {
+    setDrawingPolygon(true)
+    if (!isMultiPointMode && typeof toggleMultiPointMode === "function") {
+      toggleMultiPointMode()
+      message.info("Polygon drawing mode activated. Draw your polygon on the map.")
+    }
   }
 
   const renderReportForm = () => {
@@ -116,10 +133,19 @@ export const SurfaceReportModal = ({
               </Select>
             </Form.Item>
             <Form.Item>
+              <Button
+                type={drawingPolygon ? "default" : "primary"}
+                onClick={handleCreatePolygon}
+                disabled={drawingPolygon || polygonDrawn}
+                style={{ marginBottom: 8 }}
+              >
+                {polygonDrawn ? "Polygon Created" : "Create Polygon"}
+              </Button>
+              <br />
               <Text>
                 {polygonDrawn
                   ? "Polygon has been drawn. Ready to calculate."
-                  : "Please draw a polygon around the stockpile/depression area."}
+                  : "Please create a polygon around the stockpile/depression area."}
               </Text>
               {polygonElevationError && (
                 <Text type="danger">
@@ -226,7 +252,9 @@ export const SurfaceReportModal = ({
   const renderResults = () => {
     if (!calculationComplete || !volumeResults) return null
 
-    const { cut, fill, excess } = volumeResults
+    const {
+      cut, fill, excess, area, heightDiff, minElevation, maxElevation, polygonPoints, generatedSurfaceElevation, avgSurfaceElevation
+    } = volumeResults
 
     return (
       <Card className="mt-4">
@@ -253,35 +281,64 @@ export const SurfaceReportModal = ({
         <Text>{surfaceLibrary.find((s) => s.id === selectedSurface)?.surfaceName || selectedSurface}</Text>
         <br />
 
-        {reportType === "elevation" && (
-          <>
-            <Text strong>Selected RL: </Text>
-            <Text>{selectedElevation}</Text>
-            <br />
-          </>
-        )}
+        <Text strong>Polygon Area: </Text>
+        <Text>{area?.toFixed(2)} m²</Text>
+        <br />
 
-        {reportType === "surface" && (
-          <>
-            <Text strong>Second Surface: </Text>
-            <Text>
-              {surfaceLibrary.find((s) => s.id === selectedSecondSurface)?.surfaceName || selectedSecondSurface}
-            </Text>
-            <br />
-          </>
-        )}
+        <Text strong>Height Difference: </Text>
+        <Text>{heightDiff?.toFixed(2)} m</Text>
+        <br />
+
+        <Text strong>Volume: </Text>
+        <Text>{(cut || fill)?.toFixed(2)} m³</Text>
+        <br />
+
+        <Text strong>Min Elevation: </Text>
+        <Text>{minElevation?.toFixed(2)} m</Text>
+        <br />
+
+        <Text strong>Max Elevation: </Text>
+        <Text>{maxElevation?.toFixed(2)} m</Text>
+        <br />
 
         <Divider />
 
-        <Text>Cut = {cut} m³</Text>
-        <br />
-        <Text>Fill = {fill} m³</Text>
-        <br />
-        <Text>--------------</Text>
-        <br />
-        <Text strong>
-          {excess >= 0 ? "Excess" : "Shortage"} = {Math.abs(excess)} m³
-        </Text>
+        <Text strong>Polygon Points (X, Y, Z):</Text>
+        <ul>
+          {polygonPoints?.map((pt, idx) => (
+            <li key={idx}>
+              ({pt.x.toFixed(2)}, {pt.y.toFixed(2)}, {pt.z.toFixed(2)})
+            </li>
+          ))}
+        </ul>
+
+        <Divider />
+
+        {/* SVG Sketch */}
+        <div style={{ border: "1px solid #ccc", margin: "10px 0", width: 300, height: 200 }}>
+          <svg width="300" height="200">
+            {/* Draw polygon */}
+            <polygon
+              points={polygonPoints.map(pt => `${50 + pt.x / 10},${150 - pt.y / 10}`).join(" ")}
+              fill={reportMode === "stockpile" ? "#bdb76b" : "#ff9800"}
+              stroke="#333"
+              strokeWidth="2"
+              opacity="0.7"
+            />
+            {/* Draw base/top line */}
+            <line
+              x1={50 + polygonPoints[0]?.x / 10}
+              y1={150 - polygonPoints[0]?.y / 10}
+              x2={50 + polygonPoints[1]?.x / 10}
+              y2={150 - polygonPoints[1]?.y / 10}
+              stroke="#000"
+              strokeWidth="3"
+            />
+          </svg>
+        </div>
+
+        <Button onClick={handleExportPNG} style={{ marginRight: 8 }}>Export PNG</Button>
+        <Button onClick={handleExportPDF}>Export PDF</Button>
 
         <Divider />
 
@@ -300,15 +357,63 @@ export const SurfaceReportModal = ({
           </Text>
         )}
 
-        {reportType === "stockpile" && reportMode === "stockpile" && (
+        {reportMode === "stockpile" && (
           <Text type="secondary" className="mt-2">
             Note: Stockpile volume is calculated based on the surface and a base surface derived from the perimeter
             polygon. The accuracy of the volume estimate depends on how closely the polygon outline and elevation data
             represent the actual surface beneath the stockpile.
           </Text>
         )}
+        {polygonElevationError && (
+          <Text type="danger">
+            The polygon drawn around the perimeter of the {reportMode} indicates a potential base/top elevation
+            error. We recommend conducting a detailed analysis of the {reportMode} base.
+          </Text>
+        )}
       </Card>
     )
+  }
+
+  // Add export handlers (simple SVG to PNG/PDF export)
+  const handleExportPNG = () => {
+    const svg = document.querySelector("svg")
+    if (!svg) return
+    const svgData = new XMLSerializer().serializeToString(svg)
+    const canvas = document.createElement("canvas")
+    canvas.width = 300
+    canvas.height = 200
+    const ctx = canvas.getContext("2d")
+    const img = new window.Image()
+    img.onload = function () {
+      ctx.drawImage(img, 0, 0)
+      const pngFile = canvas.toDataURL("image/png")
+      const a = document.createElement("a")
+      a.href = pngFile
+      a.download = "surface-report.png"
+      a.click()
+    }
+    img.src = "data:image/svg+xml;base64," + window.btoa(svgData)
+  }
+
+  const handleExportPDF = () => {
+    const svg = document.querySelector("svg")
+    if (!svg) return
+    const svgData = new XMLSerializer().serializeToString(svg)
+    const canvas = document.createElement("canvas")
+    canvas.width = 300
+    canvas.height = 200
+    const ctx = canvas.getContext("2d")
+    const img = new window.Image()
+    img.onload = function () {
+      ctx.drawImage(img, 0, 0)
+      const imgData = canvas.toDataURL("image/png")
+      // Use jsPDF for PDF export
+      const { jsPDF } = require('jspdf')
+      const pdf = new jsPDF()
+      pdf.addImage(imgData, "PNG", 10, 10, 180, 120)
+      pdf.save("surface-report.pdf")
+    }
+    img.src = "data:image/svg+xml;base64," + window.btoa(svgData)
   }
 
   return (
